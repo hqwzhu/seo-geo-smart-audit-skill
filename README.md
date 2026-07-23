@@ -2,6 +2,8 @@
 
 一个可直接预览与部署的全栈网页应用。它把原有的只读 SEO/GEO 巡检 Skill 包装为浏览器界面：输入公开站点 URL，即可获得带证据、优先级、修复建议和验收方式的报告，并下载 JSON 或 Markdown。
 
+创作者：[ENHE AI工作室](https://www.enhe-tech.com.cn)。网页界面使用微软雅黑作为中文优先字体，并在页首和页尾保留创作者与官网入口。
+
 ## 适用场景
 
 - 技术 SEO：robots.txt、sitemap、状态码、索引、canonical、标题、H1、图片 alt、内部链接。

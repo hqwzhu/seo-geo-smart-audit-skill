@@ -4,5 +4,6 @@ __pycache__/
 .coverage
 htmlcov/
 .pytest_cache/
+.playwright-cli/
 audit.json
 audit.md
