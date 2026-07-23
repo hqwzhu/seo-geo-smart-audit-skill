@@ -35,6 +35,16 @@ class AppRequestTests(unittest.TestCase):
     def test_web_entrypoint_exists(self) -> None:
         self.assertTrue((WEB_DIR / "index.html").is_file())
 
+    def test_web_entrypoint_links_supported_agents(self) -> None:
+        html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+        for website in (
+            "https://openai.com/codex/",
+            "https://openclaw.ai/",
+            "https://hermes-agent.nousresearch.com/",
+            "https://claude.com/product/claude-code",
+        ):
+            self.assertIn(website, html)
+
     def test_health_and_private_target_boundary(self) -> None:
         server = ThreadingHTTPServer(("127.0.0.1", 0), AuditAppHandler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)

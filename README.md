@@ -1,6 +1,6 @@
 # 独立站 SEO/GEO 智能巡检
 
-一个可直接预览与部署的全栈网页应用。它把原有的只读 SEO/GEO 巡检 Skill 包装为浏览器界面：输入公开站点 URL，即可获得带证据、优先级、修复建议和验收方式的报告，并下载 JSON 或 Markdown。
+一个可直接预览与部署的全栈网页应用。它把原有的只读 SEO/GEO 巡检 Skill 包装为浏览器界面：输入公开站点 URL，即可获得带证据、优先级、修复建议和验收方式的完整报告，并下载 JSON、Markdown 或智能体提示词包。当前版本为 `1.2.0`。
 
 创作者：[ENHE AI工作室](https://www.enhe-tech.com.cn)。网页界面使用微软雅黑作为中文优先字体，并在页首和页尾保留创作者与官网入口。
 
@@ -10,6 +10,23 @@
 - 国际化：`lang`、hreflang 自引用与互惠关系。
 - 结构化数据：静态 JSON-LD 解析，并明确标出需要浏览器渲染复核的结论。
 - GEO：AI/搜索爬虫 robots 策略、`llms.txt` 等机器可读资源、内容可引用性证据边界。
+
+## 完整报告与智能体执行
+
+- **已经具备**：列出本次抓取证据能够确认的 SEO/GEO 优势，修复时应保留这些能力。
+- **存在的问题**：按严重级别展示问题、证据状态、影响范围和当前证据。
+- **解决方案**：每个问题都有可执行修复动作与独立验收方式。
+- **其他优化建议**：补充不应被误报为已验证缺陷的渲染、性能、搜索平台和答案引擎取证路线。
+- **智能体提示词**：基于同一份审计证据，为 Codex、OpenClaw、Hermes Agent 和 Claude Code 生成可复制、可下载的执行提示词。
+
+智能体官方入口：
+
+- [Codex](https://openai.com/codex/)
+- [OpenClaw](https://openclaw.ai/)
+- [Hermes Agent](https://hermes-agent.nousresearch.com/)
+- [Claude Code](https://claude.com/product/claude-code)
+
+说明：用户需求中的 “Hennes Agent” 按 Nous Research 的官方产品名称 **Hermes Agent** 实现。
 
 ## 安全与证据边界
 

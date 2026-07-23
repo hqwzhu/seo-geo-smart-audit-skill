@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="只读、证据化的独立站 SEO 与 GEO 智能巡检应用。" />
+    <link rel="icon" href="data:," />
     <title>独立站 SEO/GEO 智能巡检</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -98,21 +99,22 @@
           <div class="report-actions">
             <button id="download-markdown" class="secondary-button" type="button">下载 Markdown</button>
             <button id="download-json" class="secondary-button" type="button">下载 JSON</button>
+            <button id="download-prompts" class="secondary-button" type="button">下载智能体提示词</button>
           </div>
         </div>
 
         <div id="summary-cards" class="summary-grid"></div>
 
-        <div class="report-grid">
-          <section class="findings-section" aria-labelledby="findings-title">
+        <div class="report-overview-grid">
+          <section class="strengths-section" aria-labelledby="strengths-title">
             <div class="section-heading-with-filter">
               <div>
-                <p class="section-kicker">问题队列</p>
-                <h3 id="findings-title">按优先级处理</h3>
+                <p class="section-kicker">已经具备</p>
+                <h3 id="strengths-title">当前 SEO/GEO 优势</h3>
               </div>
-              <div id="severity-filters" class="filter-group" aria-label="按严重级别筛选"></div>
+              <p class="evidence-note">基于本次已抓取样本</p>
             </div>
-            <div id="findings-list" class="findings-list"></div>
+            <div id="strengths-list" class="strengths-grid"></div>
           </section>
 
           <aside class="coverage-card" aria-labelledby="coverage-title">
@@ -120,6 +122,54 @@
             <h3 id="coverage-title">已抓取页面</h3>
             <div id="coverage-list" class="coverage-list"></div>
           </aside>
+        </div>
+
+        <section class="findings-section" aria-labelledby="findings-title">
+          <div class="section-heading-with-filter">
+            <div>
+              <p class="section-kicker">问题与方案</p>
+              <h3 id="findings-title">按优先级处理</h3>
+            </div>
+            <div id="severity-filters" class="filter-group" aria-label="按严重级别筛选"></div>
+          </div>
+          <div id="findings-list" class="findings-list"></div>
+        </section>
+
+        <section class="recommendations-section" aria-labelledby="recommendations-title">
+          <div>
+            <p class="section-kicker">其他优化建议</p>
+            <h3 id="recommendations-title">建议的后续路线</h3>
+          </div>
+          <div id="recommendations-list" class="recommendations-list"></div>
+        </section>
+
+        <section class="agent-prompts-section" aria-labelledby="agent-prompts-title">
+          <div class="section-heading-with-filter">
+            <div>
+              <p class="section-kicker">交给智能体执行</p>
+              <h3 id="agent-prompts-title">修复提示词</h3>
+            </div>
+            <div id="agent-selector" class="agent-selector" aria-label="选择智能体"></div>
+          </div>
+          <div class="prompt-toolbar">
+            <div><strong id="agent-prompt-name">Codex</strong><a id="agent-prompt-website" href="https://openai.com/codex/" target="_blank" rel="noreferrer">访问官网 ↗</a></div>
+            <button id="copy-agent-prompt" class="secondary-button compact" type="button">复制提示词</button>
+          </div>
+          <pre id="agent-prompt-content" class="agent-prompt-content"></pre>
+        </section>
+      </section>
+
+      <section class="agent-directory" aria-labelledby="agent-directory-title">
+        <div class="agent-directory-heading">
+          <p class="section-kicker">执行工具</p>
+          <h2 id="agent-directory-title">选择你的智能体</h2>
+          <p>将报告生成的提示词粘贴到对应工具，并在目标代码仓库中执行。</p>
+        </div>
+        <div class="agent-links">
+          <a href="https://openai.com/codex/" target="_blank" rel="noreferrer"><span>CD</span><strong>Codex</strong><small>OpenAI 编程智能体</small><b>↗</b></a>
+          <a href="https://openclaw.ai/" target="_blank" rel="noreferrer"><span>OC</span><strong>OpenClaw</strong><small>开源个人智能体</small><b>↗</b></a>
+          <a href="https://hermes-agent.nousresearch.com/" target="_blank" rel="noreferrer"><span>HA</span><strong>Hermes Agent</strong><small>Nous Research</small><b>↗</b></a>
+          <a href="https://claude.com/product/claude-code" target="_blank" rel="noreferrer"><span>CC</span><strong>Claude Code</strong><small>Anthropic 编程智能体</small><b>↗</b></a>
         </div>
       </section>
 

@@ -8,12 +8,18 @@ import unittest
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from site_audit import AuditHTMLParser, audit_site  # noqa: E402
+from site_audit import AuditHTMLParser, audit_site, markdown_report  # noqa: E402
 
 
 class FixtureHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         port = self.server.server_address[1]
+        if self.path == "/robots.txt" and getattr(self.server, "robots_missing", False):
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"not found")
+            return
         routes = {
             "/robots.txt": ("text/plain", "User-agent: *\nAllow: /\nSitemap: /sitemap.xml\n"),
             "/sitemap.xml": (
@@ -95,6 +101,60 @@ class SiteAuditTests(unittest.TestCase):
         self.assertEqual(1, result["discovery"]["sitemap_duplicate_url_count"])
         self.assertEqual(200, result["discovery"]["machine_assets"]["/llms.txt"]["status"])
         self.assertIn("sitemap_duplicate_urls", {item["code"] for item in result["findings"]})
+
+        strength_codes = {item["code"] for item in result["strengths"]}
+        self.assertTrue(
+            {
+                "robots_available",
+                "sitemap_available",
+                "titles_present",
+                "descriptions_present",
+                "self_canonical_complete",
+                "h1_structure_complete",
+                "html_lang_present",
+                "valid_static_json_ld",
+                "ai_bot_access_available",
+                "machine_assets_available",
+            }.issubset(strength_codes)
+        )
+
+        prompt_ids = {item["id"] for item in result["agent_prompts"]}
+        self.assertEqual({"codex", "openclaw", "hermes", "claude-code"}, prompt_ids)
+        for item in result["agent_prompts"]:
+            self.assertIn(target, item["prompt"])
+            self.assertIn("解决方案", item["prompt"])
+            self.assertIn("验收方法", item["prompt"])
+
+        markdown = markdown_report(result)
+        self.assertIn("## 已经具备的 SEO/GEO 相关内容", markdown)
+        self.assertIn("## 存在的问题与针对性解决方案", markdown)
+        self.assertIn("## 智能体执行提示词", markdown)
+        self.assertIn("### Codex", markdown)
+        self.assertIn("### Hermes Agent", markdown)
+
+    def test_missing_robots_is_informational(self) -> None:
+        server = ThreadingHTTPServer(("127.0.0.1", 0), FixtureHandler)
+        server.robots_missing = True
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            target = f"http://127.0.0.1:{server.server_address[1]}/"
+            result = audit_site(
+                target,
+                max_pages=1,
+                timeout=2,
+                delay=0,
+                max_sitemaps=1,
+                allow_private=True,
+            )
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+        finding = next(item for item in result["findings"] if item["code"] == "robots_unavailable")
+        self.assertEqual("info", finding["severity"])
+        self.assertIn("没有显式抓取策略", finding["issue"])
 
 
 if __name__ == "__main__":

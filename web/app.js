@@ -6,13 +6,21 @@ const message = document.querySelector('#form-message');
 const emptyState = document.querySelector('#empty-state');
 const report = document.querySelector('#report');
 const summaryCards = document.querySelector('#summary-cards');
+const strengthsList = document.querySelector('#strengths-list');
 const findingsList = document.querySelector('#findings-list');
 const filters = document.querySelector('#severity-filters');
 const coverageList = document.querySelector('#coverage-list');
+const recommendationsList = document.querySelector('#recommendations-list');
+const agentSelector = document.querySelector('#agent-selector');
+const agentPromptName = document.querySelector('#agent-prompt-name');
+const agentPromptWebsite = document.querySelector('#agent-prompt-website');
+const agentPromptContent = document.querySelector('#agent-prompt-content');
+const copyAgentPromptButton = document.querySelector('#copy-agent-prompt');
 const loadingTemplate = document.querySelector('#loading-template');
 
 let latestResult = null;
 let activeSeverity = 'all';
+let activeAgent = 'codex';
 
 const severityNames = {
   critical: '严重',
@@ -50,10 +58,11 @@ function showMessage(text, isError = false) {
 
 function renderSummary(summary) {
   const counts = summary.finding_counts || {};
+  const urgentCount = (counts.critical ?? 0) + (counts.high ?? 0);
   const cards = [
-    { label: '已抓取页面', value: summary.pages_crawled ?? 0, className: '' },
-    { label: '严重问题', value: counts.critical ?? 0, className: 'critical' },
-    { label: '高优先级', value: counts.high ?? 0, className: 'high' },
+    { label: '已验证优势', value: summary.strength_count ?? latestResult.audit.strengths.length, className: 'positive' },
+    { label: '问题与待取证', value: latestResult.audit.findings.length, className: '' },
+    { label: '高优先级', value: urgentCount, className: urgentCount ? 'high' : 'positive' },
     { label: '需渲染复核', value: latestResult.audit.findings.filter((item) => item.status === 'render_required').length, className: 'info' },
     { label: '外部数据待补', value: latestResult.audit.findings.filter((item) => item.status === 'external_data_required').length, className: 'info' },
   ];
@@ -61,6 +70,25 @@ function renderSummary(summary) {
     <article class="summary-card ${card.className}">
       <span class="label">${escapeHtml(card.label)}</span>
       <strong>${escapeHtml(card.value)}</strong>
+    </article>
+  `).join('');
+}
+
+function renderStrengths() {
+  const strengths = latestResult.audit.strengths || [];
+  if (!strengths.length) {
+    strengthsList.innerHTML = '<p class="empty-findings">本次样本尚未形成可确认的优势项。</p>';
+    return;
+  }
+  strengthsList.innerHTML = strengths.map((item) => `
+    <article class="strength-item">
+      <div class="strength-top"><span>${escapeHtml(item.id)} · ${escapeHtml(item.category)}</span><b>已验证</b></div>
+      <h4>${escapeHtml(item.title)}</h4>
+      <p>${escapeHtml(item.value)}</p>
+      <details>
+        <summary>查看优势证据</summary>
+        <pre>${escapeHtml(formatEvidence(item.evidence))}</pre>
+      </details>
     </article>
   `).join('');
 }
@@ -95,8 +123,8 @@ function renderFindings() {
       </div>
       <h4>${escapeHtml(finding.issue)}</h4>
       <span class="status ${escapeHtml(finding.status)}">${escapeHtml(statusNames[finding.status] || finding.status)}</span>
-      <p><strong>最小修复：</strong>${escapeHtml(finding.action)}</p>
-      <p><strong>验收方式：</strong>${escapeHtml(finding.verification)}</p>
+      <div class="solution-block"><span>解决方案</span><p>${escapeHtml(finding.action)}</p></div>
+      <p class="verification-line"><strong>验收方式：</strong>${escapeHtml(finding.verification)}</p>
       <details>
         <summary>查看当前证据</summary>
         <pre>${escapeHtml(formatEvidence(finding.evidence))}</pre>
@@ -115,15 +143,57 @@ function renderCoverage(pages) {
   `).join('') || '<p class="empty-findings">未抓取到页面。</p>';
 }
 
+function renderRecommendations() {
+  const recommendations = latestResult.audit.recommendations || [];
+  recommendationsList.innerHTML = recommendations.map((item) => `
+    <article class="recommendation-item">
+      <span>${escapeHtml(item.priority)}</span>
+      <div>
+        <h4>${escapeHtml(item.title)}</h4>
+        <p>${escapeHtml(item.reason)}</p>
+        <p><strong>下一步：</strong>${escapeHtml(item.next_step)}</p>
+      </div>
+    </article>
+  `).join('') || '<p class="empty-findings">当前没有额外建议。</p>';
+}
+
+function renderAgentPrompts() {
+  const prompts = latestResult.audit.agent_prompts || [];
+  if (!prompts.length) {
+    agentSelector.innerHTML = '';
+    agentPromptContent.textContent = '本次报告没有生成智能体提示词。';
+    return;
+  }
+  if (!prompts.some((item) => item.id === activeAgent)) activeAgent = prompts[0].id;
+  agentSelector.innerHTML = prompts.map((item) => `
+    <button class="agent-selector-button ${item.id === activeAgent ? 'active' : ''}" type="button" data-agent="${escapeHtml(item.id)}">${escapeHtml(item.name)}</button>
+  `).join('');
+  agentSelector.querySelectorAll('button').forEach((button) => {
+    button.addEventListener('click', () => {
+      activeAgent = button.dataset.agent;
+      renderAgentPrompts();
+    });
+  });
+  const selected = prompts.find((item) => item.id === activeAgent) || prompts[0];
+  agentPromptName.textContent = selected.name;
+  agentPromptWebsite.href = selected.website;
+  agentPromptContent.textContent = selected.prompt;
+}
+
 function renderReport(result) {
   latestResult = result;
+  activeSeverity = 'all';
+  activeAgent = 'codex';
   const { audit } = result;
   document.querySelector('#report-target').textContent = audit.meta.target;
   document.querySelector('#report-meta').textContent = `完成于 ${new Date(audit.meta.finished_at).toLocaleString('zh-CN', { hour12: false })} · ${audit.summary.html_pages} 个 HTML 页面 · ${audit.summary.failed_pages} 个失败页面`;
   renderSummary(audit.summary);
+  renderStrengths();
   renderFilters();
   renderFindings();
   renderCoverage(audit.pages);
+  renderRecommendations();
+  renderAgentPrompts();
   emptyState.classList.add('hidden');
   report.classList.remove('hidden');
   report.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -137,6 +207,31 @@ function download(content, filename, contentType) {
   link.click();
   link.remove();
   URL.revokeObjectURL(link.href);
+}
+
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.append(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+}
+
+function buildPromptBundle() {
+  return (latestResult?.audit.agent_prompts || []).map((item) => [
+    `# ${item.name}`,
+    `官网：${item.website}`,
+    '',
+    item.prompt,
+  ].join('\n')).join('\n\n---\n\n');
 }
 
 form.addEventListener('submit', async (event) => {
@@ -175,4 +270,20 @@ document.querySelector('#download-markdown').addEventListener('click', () => {
 
 document.querySelector('#download-json').addEventListener('click', () => {
   if (latestResult) download(JSON.stringify(latestResult.audit, null, 2), 'seo-geo-audit.json', 'application/json;charset=utf-8');
+});
+
+document.querySelector('#download-prompts').addEventListener('click', () => {
+  if (latestResult) download(buildPromptBundle(), 'seo-geo-agent-prompts.md', 'text/markdown;charset=utf-8');
+});
+
+copyAgentPromptButton.addEventListener('click', async () => {
+  if (!latestResult || !agentPromptContent.textContent) return;
+  const original = copyAgentPromptButton.textContent;
+  try {
+    await copyText(agentPromptContent.textContent);
+    copyAgentPromptButton.textContent = '已复制';
+  } catch {
+    copyAgentPromptButton.textContent = '复制失败';
+  }
+  window.setTimeout(() => { copyAgentPromptButton.textContent = original; }, 1600);
 });

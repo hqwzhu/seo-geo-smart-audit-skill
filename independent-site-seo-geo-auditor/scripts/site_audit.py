@@ -383,11 +383,74 @@ def add_finding(
     )
 
 
+def add_strength(
+    strengths: list[dict[str, Any]],
+    *,
+    code: str,
+    category: str,
+    title: str,
+    evidence: Any,
+    value: str,
+) -> None:
+    strengths.append(
+        {
+            "id": f"S{len(strengths) + 1:03d}",
+            "code": code,
+            "category": category,
+            "status": "verified",
+            "title": title,
+            "evidence": evidence,
+            "value": value,
+        }
+    )
+
+
 def build_findings(audit: dict[str, Any]) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     pages = audit["pages"]
     html_pages = [page for page in pages if page.get("is_html")]
     sitemap_urls = set(audit["discovery"]["sitemap_urls"])
+
+    robots = audit["discovery"]["robots"]
+    if robots.get("status") != 200:
+        robots_missing = robots.get("status") == 404
+        add_finding(
+            findings,
+            code="robots_unavailable",
+            category="crawlability",
+            severity="info" if robots_missing else "medium",
+            status="verified",
+            issue="未提供 robots.txt，当前没有显式抓取策略" if robots_missing else "robots.txt 不可正常读取",
+            evidence={"url": robots.get("final_url") or robots.get("requested_url"), "status": robots.get("status"), "error": robots.get("error")},
+            action=(
+                "如果需要声明抓取边界或 sitemap 地址，则在站点根目录提供 robots.txt；否则记录 404 为有意配置。"
+                if robots_missing
+                else "恢复站点根目录 robots.txt 的稳定访问，并确认策略及 sitemap 地址。"
+            ),
+            verification=(
+                "确认 404 符合业务意图，或请求 /robots.txt 并验证状态为 200、语法可解析。"
+                if robots_missing
+                else "请求 /robots.txt，确认状态为 200、语法可解析且策略符合业务意图。"
+            ),
+        )
+
+    valid_sitemaps = [
+        item
+        for item in audit["discovery"]["sitemaps"]
+        if item.get("status") == 200 and item.get("kind") in {"urlset", "sitemapindex"}
+    ]
+    if not valid_sitemaps:
+        add_finding(
+            findings,
+            code="sitemap_unavailable",
+            category="crawlability",
+            severity="medium",
+            status="verified",
+            issue="未发现可解析的 XML Sitemap",
+            evidence=audit["discovery"]["sitemaps"],
+            action="生成仅包含规范、可索引、返回 200 URL 的 XML Sitemap，并在 robots.txt 中声明。",
+            verification="重新请求 sitemap，确认 XML 可解析、URL 属于本域且与索引策略一致。",
+        )
 
     if audit["discovery"]["sitemap_duplicate_url_count"]:
         add_finding(
@@ -430,6 +493,20 @@ def build_findings(audit: dict[str, Any]) -> list[dict[str, Any]]:
             verification="确认页面索引指令与 sitemap 收录策略一致。",
         )
 
+    other_noindex = [page["url"] for page in html_pages if page.get("noindex") and page["url"] not in sitemap_urls]
+    if other_noindex:
+        add_finding(
+            findings,
+            code="noindex_pages_review",
+            category="indexation",
+            severity="low",
+            status="verified",
+            issue="部分已抓取页面声明 noindex，需确认是否符合预期",
+            evidence=other_noindex[:20],
+            action="逐页确认页面是否应参与搜索；应收录则移除 noindex，不应收录则确保它不出现在 sitemap 和核心内链中。",
+            verification="复查页面 robots 指令、sitemap 和站内链接，确认索引策略一致。",
+        )
+
     missing_title = [page["url"] for page in html_pages if not page.get("title")]
     if missing_title:
         add_finding(
@@ -442,6 +519,20 @@ def build_findings(audit: dict[str, Any]) -> list[dict[str, Any]]:
             evidence=missing_title[:20],
             action="为每个可索引页面生成唯一且符合页面意图的 title。",
             verification="抓取页面并确认渲染前后 title 存在且唯一。",
+        )
+
+    missing_description = [page["url"] for page in html_pages if not page.get("meta_description")]
+    if missing_description:
+        add_finding(
+            findings,
+            code="missing_meta_description",
+            category="on_page",
+            severity="medium",
+            status="verified",
+            issue="部分 HTML 页面缺少 meta description",
+            evidence=missing_description[:20],
+            action="为重要可索引页面编写唯一、准确且与搜索意图一致的摘要，避免模板化堆词。",
+            verification="重新抓取并确认重要页面 description 存在、唯一且与可见内容一致。",
         )
 
     missing_canonical = [page["url"] for page in html_pages if not page.get("canonical")]
@@ -488,6 +579,38 @@ def build_findings(audit: dict[str, Any]) -> list[dict[str, Any]]:
             evidence=h1_issues[:20],
             action="让页面主标题使用一个与搜索意图一致的 H1；其他层级使用 H2/H3。",
             verification="检查渲染 DOM 的标题层级。",
+        )
+
+    missing_lang = [page["url"] for page in html_pages if not page.get("html_lang")]
+    if missing_lang:
+        add_finding(
+            findings,
+            code="missing_html_lang",
+            category="international_seo",
+            severity="medium",
+            status="verified",
+            issue="部分页面缺少 html lang 语言声明",
+            evidence=missing_lang[:20],
+            action="在每个页面的 html 元素上设置准确的 BCP 47 语言标签，例如 zh-CN 或 en。",
+            verification="检查原始 HTML 与渲染 DOM，确认 lang 与页面主要语言一致。",
+        )
+
+    missing_alt = [
+        {"url": page["url"], "images_missing_alt_attribute": page.get("images_missing_alt_attribute", 0)}
+        for page in html_pages
+        if page.get("images_missing_alt_attribute", 0) > 0
+    ]
+    if missing_alt:
+        add_finding(
+            findings,
+            code="images_missing_alt",
+            category="on_page",
+            severity="low",
+            status="verified",
+            issue="部分图片缺少 alt 属性",
+            evidence=missing_alt[:20],
+            action="为承载信息的图片补充简洁、上下文相关的 alt；装饰图片使用空 alt，避免关键词堆砌。",
+            verification="检查渲染 DOM，确认所有 img 均有符合用途的 alt 属性。",
         )
 
     for field, code, label in (("title", "duplicate_title", "title"), ("meta_description", "duplicate_description", "description")):
@@ -620,6 +743,313 @@ def build_findings(audit: dict[str, Any]) -> list[dict[str, Any]]:
         verification="保存逐查询结果、引用 URL、竞争来源和复测日期。",
     )
     return findings
+
+
+def build_strengths(audit: dict[str, Any]) -> list[dict[str, Any]]:
+    strengths: list[dict[str, Any]] = []
+    pages = audit["pages"]
+    html_pages = [page for page in pages if page.get("is_html")]
+    finding_codes = {item["code"] for item in audit["findings"]}
+
+    if urlsplit(audit["meta"]["target"]).scheme == "https":
+        add_strength(
+            strengths,
+            code="https_enabled",
+            category="technical_seo",
+            title="目标站点使用 HTTPS",
+            evidence=audit["meta"]["target"],
+            value="为抓取、用户信任和安全传输提供基础保障。",
+        )
+
+    robots = audit["discovery"]["robots"]
+    if robots.get("status") == 200:
+        add_strength(
+            strengths,
+            code="robots_available",
+            category="crawlability",
+            title="robots.txt 可正常读取",
+            evidence={"url": robots.get("final_url") or robots.get("requested_url"), "status": 200},
+            value="搜索与答案引擎可以读取站点公开抓取策略。",
+        )
+
+    valid_sitemaps = [
+        {"url": item["url"], "kind": item["kind"], "url_count": item["url_count"]}
+        for item in audit["discovery"]["sitemaps"]
+        if item.get("status") == 200 and item.get("kind") in {"urlset", "sitemapindex"}
+    ]
+    if valid_sitemaps:
+        add_strength(
+            strengths,
+            code="sitemap_available",
+            category="crawlability",
+            title="已提供可解析的 XML Sitemap",
+            evidence=valid_sitemaps,
+            value="为搜索引擎发现规范 URL 和理解站点规模提供稳定入口。",
+        )
+
+    if html_pages and all(not page.get("noindex") for page in html_pages):
+        add_strength(
+            strengths,
+            code="sample_pages_indexable",
+            category="indexation",
+            title="已抓取 HTML 样本未发现 noindex",
+            evidence={"checked_pages": len(html_pages)},
+            value="当前样本没有通过页面级指令主动排除搜索收录。",
+        )
+
+    if html_pages and all(page.get("title") for page in html_pages):
+        add_strength(
+            strengths,
+            code="titles_present",
+            category="on_page",
+            title="已抓取页面均具备 title",
+            evidence={"covered_pages": len(html_pages)},
+            value="为搜索结果理解页面主题提供基础信号。",
+        )
+
+    if html_pages and all(page.get("meta_description") for page in html_pages):
+        add_strength(
+            strengths,
+            code="descriptions_present",
+            category="on_page",
+            title="已抓取页面均具备 meta description",
+            evidence={"covered_pages": len(html_pages)},
+            value="为搜索摘要和页面价值表达提供可复用文本。",
+        )
+
+    self_canonical_pages = [
+        page["url"]
+        for page in html_pages
+        if page.get("canonical")
+        and normalized_url(page["canonical"]) == normalized_url(page.get("final_url") or page["url"])
+    ]
+    if html_pages and len(self_canonical_pages) == len(html_pages):
+        add_strength(
+            strengths,
+            code="self_canonical_complete",
+            category="canonicalization",
+            title="已抓取页面均设置自引用 canonical",
+            evidence={"covered_pages": len(self_canonical_pages)},
+            value="帮助搜索引擎聚合重复 URL 信号并识别规范版本。",
+        )
+
+    if html_pages and all(page.get("h1_count") == 1 for page in html_pages):
+        add_strength(
+            strengths,
+            code="h1_structure_complete",
+            category="on_page",
+            title="已抓取页面均具备单一 H1",
+            evidence={"covered_pages": len(html_pages)},
+            value="页面主主题层级清晰，便于用户和机器理解。",
+        )
+
+    if html_pages and all(page.get("html_lang") for page in html_pages):
+        languages = sorted({page["html_lang"] for page in html_pages})
+        add_strength(
+            strengths,
+            code="html_lang_present",
+            category="international_seo",
+            title="已抓取页面均声明主要语言",
+            evidence={"covered_pages": len(html_pages), "languages": languages},
+            value="帮助搜索、辅助技术和答案引擎正确识别内容语言。",
+        )
+
+    valid_json_ld_count = sum(page.get("json_ld_static_valid_count", 0) for page in html_pages)
+    if valid_json_ld_count:
+        add_strength(
+            strengths,
+            code="valid_static_json_ld",
+            category="structured_data",
+            title="静态 HTML 中发现可解析的 JSON-LD",
+            evidence={"valid_blocks": valid_json_ld_count, "pages_with_json_ld": sum(1 for page in html_pages if page.get("json_ld_static_valid_count", 0))},
+            value="为机器理解实体、页面类型和内容关系提供结构化基础。",
+        )
+
+    hreflang_pages = [page for page in html_pages if page.get("hreflang")]
+    if hreflang_pages and "hreflang_consistency" not in finding_codes:
+        add_strength(
+            strengths,
+            code="hreflang_consistent",
+            category="international_seo",
+            title="已抓取的 hreflang 关系通过一致性检查",
+            evidence={"pages_with_hreflang": len(hreflang_pages)},
+            value="为多语言或多地区页面建立明确的替代关系。",
+        )
+
+    author_pages = [page["url"] for page in html_pages if page.get("author_signal")]
+    if author_pages:
+        add_strength(
+            strengths,
+            code="author_signals_present",
+            category="geo",
+            title="部分页面具备作者或署名信号",
+            evidence={"pages": author_pages[:20], "count": len(author_pages)},
+            value="有助于表达内容责任主体、专业性和可引用来源。",
+        )
+
+    allowed_bots = [name for name, allowed in audit["discovery"]["robots_ai_bot_access"].items() if allowed is True]
+    if allowed_bots:
+        add_strength(
+            strengths,
+            code="ai_bot_access_available",
+            category="geo",
+            title=f"{len(allowed_bots)} 个已检查的搜索/AI 爬虫允许访问首页",
+            evidence=allowed_bots,
+            value="在 robots 策略层面为相应搜索或答案引擎发现公开内容保留入口。",
+        )
+
+    available_assets = [path for path, item in audit["discovery"]["machine_assets"].items() if item.get("status") == 200]
+    if available_assets:
+        add_strength(
+            strengths,
+            code="machine_assets_available",
+            category="geo",
+            title="已提供部分机器可读资源",
+            evidence=available_assets,
+            value="可增强非 Google 答案引擎和代理对公开信息的读取效率。",
+        )
+
+    return strengths
+
+
+def build_recommendations(audit: dict[str, Any]) -> list[dict[str, str]]:
+    recommendations: list[dict[str, str]] = []
+    findings = audit["findings"]
+    blocking = [item for item in findings if item["severity"] in {"critical", "high"} and item["status"] == "verified"]
+    verified = [item for item in findings if item["status"] == "verified" and item["severity"] in {"medium", "low"}]
+    render_items = [item for item in findings if item["status"] == "render_required"]
+    external_items = [item for item in findings if item["status"] == "external_data_required"]
+
+    if blocking:
+        recommendations.append(
+            {
+                "priority": "P0",
+                "title": "先处理阻断抓取、索引和规范化的高优先级问题",
+                "reason": f"本次发现 {len(blocking)} 项已经验证的高优先级问题。",
+                "next_step": "按报告顺序逐项修复，每项都保留变更前证据、最小代码修改和验收结果。",
+            }
+        )
+    if verified:
+        recommendations.append(
+            {
+                "priority": "P1",
+                "title": "批量治理已验证的页面级基础问题",
+                "reason": f"仍有 {len(verified)} 项中低优先级问题会影响页面理解、摘要质量或可访问性。",
+                "next_step": "优先修复共用模板，再抽样复查不同页面类型，避免逐页手工修改产生漂移。",
+            }
+        )
+    if render_items:
+        recommendations.append(
+            {
+                "priority": "P1",
+                "title": "补充浏览器渲染证据",
+                "reason": f"有 {len(render_items)} 项无法通过静态 HTTP 抓取下结论。",
+                "next_step": "抽查首页、列表页、详情页及每种主要语言，保存渲染 DOM 和结构化数据验证结果。",
+            }
+        )
+    if external_items:
+        recommendations.append(
+            {
+                "priority": "P1",
+                "title": "建立性能与答案引擎可见性基线",
+                "reason": f"有 {len(external_items)} 项需要 GSC、CrUX、PageSpeed 或真实答案引擎结果。",
+                "next_step": "记录数据源、时间窗、设备、地区和查询词，避免把实验室数据或模拟回答当作真实表现。",
+            }
+        )
+    recommendations.append(
+        {
+            "priority": "P2",
+            "title": "把巡检加入发布验收和定期回归",
+            "reason": "一次性报告无法发现后续模板、路由、robots 或 sitemap 的回归。",
+            "next_step": "在发布前后对同一 URL 集合运行巡检，保存 JSON 差异，并为新增高优先级问题设置阻断门槛。",
+        }
+    )
+    return recommendations
+
+
+def compact_evidence(value: Any, limit: int = 1200) -> str:
+    text = json.dumps(value, ensure_ascii=False, separators=(",", ":")) if not isinstance(value, str) else value
+    return text if len(text) <= limit else f"{text[:limit]}…（证据已截断，请查看完整 JSON 报告）"
+
+
+def build_agent_prompts(audit: dict[str, Any]) -> list[dict[str, str]]:
+    profiles = (
+        {
+            "id": "codex",
+            "name": "Codex",
+            "website": "https://openai.com/codex/",
+            "guidance": "先读取仓库中的 AGENTS.md 和项目说明，检查当前工作树，再以最小差异实现修复；运行现有测试并报告命令证据。",
+        },
+        {
+            "id": "openclaw",
+            "name": "OpenClaw",
+            "website": "https://openclaw.ai/",
+            "guidance": "将任务拆成可回滚的受控步骤，只在明确工作区内读写；涉及生产发布、账号或站长平台时先请求人工确认。",
+        },
+        {
+            "id": "hermes",
+            "name": "Hermes Agent",
+            "website": "https://hermes-agent.nousresearch.com/",
+            "guidance": "使用计划、记忆和技能循环逐项执行；可沉淀复用流程，但不得把未经验证的假设写成已完成修复。",
+        },
+        {
+            "id": "claude-code",
+            "name": "Claude Code",
+            "website": "https://claude.com/product/claude-code",
+            "guidance": "先读取 CLAUDE.md、AGENTS.md 和现有测试约定，保持修改聚焦；完成后用测试、构建和页面证据复核。",
+        },
+    )
+
+    strength_lines = [
+        f"- {item['id']} [{item['category']}] {item['title']}；必须保留。证据：{compact_evidence(item['evidence'], 500)}"
+        for item in audit["strengths"]
+    ] or ["- 本次样本尚未形成可确认的优势项；修改前先建立当前基线。"]
+    finding_lines: list[str] = []
+    for item in audit["findings"]:
+        finding_lines.extend(
+            [
+                f"- {item['id']} [{item['severity'].upper()} / {item['status']}] {item['issue']}",
+                f"  当前证据：{compact_evidence(item['evidence'])}",
+                f"  解决方案：{item['action']}",
+                f"  验收方法：{item['verification']}",
+            ]
+        )
+
+    prompts: list[dict[str, str]] = []
+    for profile in profiles:
+        lines = [
+            f"你是 {profile['name']}，请在目标网站的源代码仓库中执行以下 SEO/GEO 修复任务。",
+            "",
+            "## 任务上下文",
+            f"- 目标站点：{audit['meta']['target']}",
+            f"- 巡检完成时间：{audit['meta']['finished_at']}",
+            f"- 样本范围：{audit['summary']['pages_crawled']} 个页面，其中 {audit['summary']['html_pages']} 个 HTML 页面",
+            "- 工作目录：由执行者在开始前确认，不要猜测仓库路径。",
+            "",
+            "## 执行方式",
+            profile["guidance"],
+            "",
+            "## 强制边界",
+            "1. 先复现报告问题并读取相关代码，再修改；不要顺手重构无关模块。",
+            "2. verified 项可进入修复；render_required 项必须先用浏览器渲染验证；external_data_required 项必须先取得真实外部数据。",
+            "3. 不登录生产后台、不提交站长平台、不更改生产数据，除非用户另行明确授权。",
+            "4. 不写入或回显 API Key、Cookie、密码和其他敏感信息。",
+            "5. 保留下列已经具备的 SEO/GEO 能力，修复不能造成回归。",
+            "",
+            "## 已具备且必须保留",
+            *strength_lines,
+            "",
+            "## 问题、解决方案与验收",
+            *finding_lines,
+            "",
+            "## 交付要求",
+            "- 输出实际修改文件清单，以及每个修改对应的报告问题 ID。",
+            "- 输出运行过的测试、构建、抓取或浏览器验证命令与结果。",
+            "- 对无法完成的项目说明阻塞原因和所需输入，不得声称已修复。",
+            "- 最后重新运行巡检，对比修复前后 strengths、findings 和未验证项。",
+        ]
+        prompts.append({**profile, "prompt": "\n".join(lines)})
+    return prompts
 
 
 def audit_site(
@@ -767,8 +1197,13 @@ def audit_site(
         "crawl_limit_reached": len(pages) >= max_pages and bool(queue),
     }
     audit["findings"] = build_findings(audit)
+    audit["strengths"] = build_strengths(audit)
+    audit["recommendations"] = build_recommendations(audit)
+    audit["agent_prompts"] = build_agent_prompts(audit)
     severity_counts = Counter(item["severity"] for item in audit["findings"])
     audit["summary"]["finding_counts"] = dict(severity_counts)
+    audit["summary"]["strength_count"] = len(audit["strengths"])
+    audit["summary"]["recommendation_count"] = len(audit["recommendations"])
     return audit
 
 
@@ -777,26 +1212,33 @@ def markdown_report(audit: dict[str, Any]) -> str:
     lines = [
         "# SEO/GEO 巡检报告",
         "",
+        "## 执行摘要",
+        "",
         f"- 目标站点：{audit['meta']['target']}",
         f"- 开始时间：{audit['meta']['started_at']}",
         f"- 完成时间：{audit['meta']['finished_at']}",
         f"- 抓取页面：{summary['pages_crawled']}（HTML {summary['html_pages']}）",
         f"- 失败页面：{summary['failed_pages']}",
         f"- 达到抓取上限：{'是' if summary['crawl_limit_reached'] else '否'}",
+        f"- 已验证优势：{len(audit['strengths'])}",
+        f"- 问题与待取证项：{len(audit['findings'])}",
         "",
-        "## 问题清单",
+        "## 已经具备的 SEO/GEO 相关内容",
+        "",
+        "> 以下优势仅代表本次已抓取样本和当前公开证据，后续修改必须避免造成回归。",
         "",
     ]
-    for item in audit["findings"]:
+    if not audit["strengths"]:
+        lines.extend(["本次样本尚未形成可确认的优势项。", ""])
+    for item in audit["strengths"]:
         evidence = json.dumps(item["evidence"], ensure_ascii=False, indent=2)
         lines.extend(
             [
-                f"### {item['id']} [{item['severity'].upper()}] {item['issue']}",
+                f"### {item['id']} {item['title']}",
                 "",
                 f"- 类别：{item['category']}",
                 f"- 状态：{item['status']}",
-                f"- 修复：{item['action']}",
-                f"- 验收：{item['verification']}",
+                f"- 价值：{item['value']}",
                 "- 证据：",
                 "",
                 "```json",
@@ -805,6 +1247,62 @@ def markdown_report(audit: dict[str, Any]) -> str:
                 "",
             ]
         )
+
+    lines.extend(["## 存在的问题与针对性解决方案", ""])
+    for item in audit["findings"]:
+        evidence = json.dumps(item["evidence"], ensure_ascii=False, indent=2)
+        lines.extend(
+            [
+                f"### {item['id']} [{item['severity'].upper()}] {item['issue']}",
+                "",
+                f"- 类别：{item['category']}",
+                f"- 状态：{item['status']}",
+                f"- 解决方案：{item['action']}",
+                f"- 验收方法：{item['verification']}",
+                "- 当前证据：",
+                "",
+                "```json",
+                evidence,
+                "```",
+                "",
+            ]
+        )
+
+    lines.extend(["## 建议的后续优化", ""])
+    for item in audit["recommendations"]:
+        lines.extend(
+            [
+                f"### {item['priority']} {item['title']}",
+                "",
+                f"- 原因：{item['reason']}",
+                f"- 下一步：{item['next_step']}",
+                "",
+            ]
+        )
+
+    lines.extend(["## 智能体执行提示词", ""])
+    for item in audit["agent_prompts"]:
+        lines.extend(
+            [
+                f"### {item['name']}",
+                "",
+                f"- 官网：{item['website']}",
+                "",
+                "```text",
+                item["prompt"],
+                "```",
+                "",
+            ]
+        )
+
+    lines.extend(["## 已抓取页面", "", "| URL | HTTP | 类型 |", "|---|---:|---|"])
+    for page in audit["pages"]:
+        page_url = str(page.get("url", "")).replace("|", "\\|")
+        page_status = page.get("status") if page.get("status") is not None else "-"
+        page_type = "HTML" if page.get("is_html") else "非 HTML"
+        lines.append(f"| {page_url} | {page_status} | {page_type} |")
+    lines.extend([""])
+
     lines.extend(["## 限制", ""])
     lines.extend(f"- {item}" for item in audit["meta"]["limitations"])
     return "\n".join(lines) + "\n"
