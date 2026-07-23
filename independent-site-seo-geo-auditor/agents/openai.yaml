@@ -1,0 +1,4 @@
+interface:
+  display_name: "独立站 SEO/GEO 智能巡检"
+  short_description: "对独立站执行技术 SEO、GEO 可见性与证据化巡检"
+  default_prompt: "使用 $independent-site-seo-geo-auditor 对目标独立站执行一次只读 SEO/GEO 巡检并输出带证据的优先级报告"

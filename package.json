@@ -1,0 +1,11 @@
+{
+  "name": "seo-geo-smart-audit-web-app",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Read-only SEO and GEO audit web application backed by the independent-site-seo-geo-auditor skill.",
+  "scripts": {
+    "dev": "python app.py",
+    "start": "python app.py",
+    "test": "python -m unittest discover -s tests -v && python independent-site-seo-geo-auditor/scripts/test_site_audit.py"
+  }
+}
