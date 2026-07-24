@@ -130,6 +130,7 @@ python scripts/site_audit.py https://example.com \
 
 完整报告必须同时包含：
 
+- 基于已验证问题计算的 100 分制结果评估、证据覆盖率和逐项扣分依据；`render_required`、`external_data_required`、`hypothesis` 不得作为已确认缺陷扣分。
 - 已经具备的 SEO/GEO 内容、当前证据及其价值。
 - 存在的问题、严重级别、证据状态和证据。
 - 针对每个问题的解决方案与可执行验收方法。
@@ -152,4 +153,4 @@ python app.py
 
 ## 版本
 
-包版本：`1.2.0`
+包版本：`1.3.0`

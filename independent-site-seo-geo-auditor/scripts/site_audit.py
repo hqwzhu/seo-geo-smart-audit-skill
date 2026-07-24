@@ -967,6 +967,55 @@ def build_recommendations(audit: dict[str, Any]) -> list[dict[str, str]]:
     return recommendations
 
 
+def build_score(audit: dict[str, Any]) -> dict[str, Any]:
+    penalties = {"critical": 25, "high": 15, "medium": 7, "low": 3, "info": 0}
+    verified_findings = [item for item in audit["findings"] if item["status"] == "verified"]
+    pending_items = [item for item in audit["findings"] if item["status"] != "verified"]
+    deductions = [
+        {
+            "finding_id": item["id"],
+            "severity": item["severity"],
+            "points": penalties[item["severity"]],
+            "issue": item["issue"],
+        }
+        for item in verified_findings
+        if penalties[item["severity"]] > 0
+    ]
+    overall = max(0, 100 - sum(item["points"] for item in deductions))
+    evidence_items = len(audit["strengths"]) + len(verified_findings)
+    evidence_total = evidence_items + len(pending_items)
+    evidence_coverage = round(evidence_items * 100 / evidence_total) if evidence_total else 0
+
+    if overall >= 90:
+        label = "基础扎实"
+        summary = "网站的基础做得不错。接下来补齐细节和待验证数据，就能更稳地提升搜索与答案引擎可见性。"
+    elif overall >= 75:
+        label = "整体良好"
+        summary = "网站具备可用基础，但还有几处会拖慢收录或影响页面理解的问题，按扣分项逐个处理即可。"
+    elif overall >= 60:
+        label = "需要优化"
+        summary = "当前有多项基础问题正在影响抓取、收录或内容理解，建议先处理扣分最高的项目。"
+    else:
+        label = "优先修复"
+        summary = "目前的基础问题较集中，可能明显影响搜索流量。先修复严重和高优先级问题，再补做其他优化。"
+
+    return {
+        "version": "1.0",
+        "overall": overall,
+        "label": label,
+        "summary": summary,
+        "evidence_coverage": evidence_coverage,
+        "verified_finding_count": len(verified_findings),
+        "pending_count": len(pending_items),
+        "deductions": deductions,
+        "pending_items": [
+            {"finding_id": item["id"], "status": item["status"], "issue": item["issue"]}
+            for item in pending_items
+        ],
+        "method": "满分 100，最低 0；按问题项扣分，仅计算 verified：严重 25、高 15、中 7、低 3、信息 0。待渲染或待外部数据项目不扣分。本分数用于安排修复优先级，不代表搜索排名或流量预测。",
+    }
+
+
 def compact_evidence(value: Any, limit: int = 1200) -> str:
     text = json.dumps(value, ensure_ascii=False, separators=(",", ":")) if not isinstance(value, str) else value
     return text if len(text) <= limit else f"{text[:limit]}…（证据已截断，请查看完整 JSON 报告）"
@@ -1017,6 +1066,7 @@ def build_agent_prompts(audit: dict[str, Any]) -> list[dict[str, str]]:
 
     prompts: list[dict[str, str]] = []
     for profile in profiles:
+        score = audit["score"]
         lines = [
             f"你是 {profile['name']}，请在目标网站的源代码仓库中执行以下 SEO/GEO 修复任务。",
             "",
@@ -1024,6 +1074,7 @@ def build_agent_prompts(audit: dict[str, Any]) -> list[dict[str, str]]:
             f"- 目标站点：{audit['meta']['target']}",
             f"- 巡检完成时间：{audit['meta']['finished_at']}",
             f"- 样本范围：{audit['summary']['pages_crawled']} 个页面，其中 {audit['summary']['html_pages']} 个 HTML 页面",
+            f"- 结果评估：{score['overall']}/100（{score['label']}），证据覆盖率 {score['evidence_coverage']}%。评分只用于安排优先级，不替代逐项验收。",
             "- 工作目录：由执行者在开始前确认，不要猜测仓库路径。",
             "",
             "## 执行方式",
@@ -1199,6 +1250,7 @@ def audit_site(
     audit["findings"] = build_findings(audit)
     audit["strengths"] = build_strengths(audit)
     audit["recommendations"] = build_recommendations(audit)
+    audit["score"] = build_score(audit)
     audit["agent_prompts"] = build_agent_prompts(audit)
     severity_counts = Counter(item["severity"] for item in audit["findings"])
     audit["summary"]["finding_counts"] = dict(severity_counts)
@@ -1223,11 +1275,47 @@ def markdown_report(audit: dict[str, Any]) -> str:
         f"- 已验证优势：{len(audit['strengths'])}",
         f"- 问题与待取证项：{len(audit['findings'])}",
         "",
-        "## 已经具备的 SEO/GEO 相关内容",
-        "",
-        "> 以下优势仅代表本次已抓取样本和当前公开证据，后续修改必须避免造成回归。",
-        "",
     ]
+    score = audit["score"]
+    lines.extend(
+        [
+            "## 结果评估",
+            "",
+            f"- 总分：{score['overall']}/100（{score['label']}）",
+            f"- 证据覆盖率：{score['evidence_coverage']}%",
+            f"- 已验证问题：{score['verified_finding_count']} 项",
+            f"- 待补证据：{score['pending_count']} 项（不计入扣分）",
+            f"- 评估结论：{score['summary']}",
+            f"- 评分方法：{score['method']}",
+            "",
+            "### 扣分依据",
+            "",
+        ]
+    )
+    if score["deductions"]:
+        lines.extend(
+            f"- {item['finding_id']}：-{item['points']} 分，{item['issue']}"
+            for item in score["deductions"]
+        )
+    else:
+        lines.append("- 本次没有需要扣分的已验证问题。")
+    lines.extend(["", "### 待补证据", ""])
+    if score["pending_items"]:
+        lines.extend(
+            f"- {item['finding_id']} [{item['status']}]：{item['issue']}"
+            for item in score["pending_items"]
+        )
+    else:
+        lines.append("- 本次没有待补证据项目。")
+    lines.extend(
+        [
+            "",
+            "## 已经具备的 SEO/GEO 相关内容",
+            "",
+            "> 以下优势仅代表本次已抓取样本和当前公开证据，后续修改必须避免造成回归。",
+            "",
+        ]
+    )
     if not audit["strengths"]:
         lines.extend(["本次样本尚未形成可确认的优势项。", ""])
     for item in audit["strengths"]:

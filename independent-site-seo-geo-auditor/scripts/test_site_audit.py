@@ -122,10 +122,21 @@ class SiteAuditTests(unittest.TestCase):
         self.assertEqual({"codex", "openclaw", "hermes", "claude-code"}, prompt_ids)
         for item in result["agent_prompts"]:
             self.assertIn(target, item["prompt"])
+            self.assertIn("结果评估", item["prompt"])
             self.assertIn("解决方案", item["prompt"])
             self.assertIn("验收方法", item["prompt"])
 
+        score = result["score"]
+        self.assertEqual(93, score["overall"])
+        self.assertEqual("基础扎实", score["label"])
+        self.assertGreater(score["evidence_coverage"], 0)
+        self.assertGreater(score["pending_count"], 0)
+        self.assertEqual(7, sum(item["points"] for item in score["deductions"]))
+        self.assertTrue(any(item["finding_id"] == "F001" for item in score["deductions"]))
+
         markdown = markdown_report(result)
+        self.assertIn("## 结果评估", markdown)
+        self.assertIn("总分：93/100", markdown)
         self.assertIn("## 已经具备的 SEO/GEO 相关内容", markdown)
         self.assertIn("## 存在的问题与针对性解决方案", markdown)
         self.assertIn("## 智能体执行提示词", markdown)

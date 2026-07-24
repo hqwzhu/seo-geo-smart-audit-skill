@@ -1,4 +1,4 @@
 interface:
   display_name: "独立站 SEO/GEO 智能巡检"
-  short_description: "输出优势、问题、解决方案及智能体执行提示词的证据化巡检"
-  default_prompt: "使用 $independent-site-seo-geo-auditor 对目标公开站点执行只读 SEO/GEO 巡检，完整输出已具备内容、存在问题、针对性解决方案、验收方法，以及 Codex、OpenClaw、Hermes Agent、Claude Code 的执行提示词。"
+  short_description: "输出评分、优势、问题、解决方案及智能体执行提示词"
+  default_prompt: "使用 $independent-site-seo-geo-auditor 对目标公开站点执行只读 SEO/GEO 巡检，完整输出结果评分与扣分依据、已具备内容、存在问题、针对性解决方案、验收方法，以及 Codex、OpenClaw、Hermes Agent、Claude Code 的执行提示词。"

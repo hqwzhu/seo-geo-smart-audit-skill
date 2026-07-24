@@ -35,6 +35,12 @@ class AppRequestTests(unittest.TestCase):
     def test_web_entrypoint_exists(self) -> None:
         self.assertTrue((WEB_DIR / "index.html").is_file())
 
+    def test_web_entrypoint_has_score_and_revised_copy(self) -> None:
+        html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn("一个不会让你失望的AI网站", html)
+        self.assertIn("找出流量卡点，拿到修复方案", html)
+        self.assertIn('id="score-value"', html)
+
     def test_web_entrypoint_links_supported_agents(self) -> None:
         html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
         for website in (

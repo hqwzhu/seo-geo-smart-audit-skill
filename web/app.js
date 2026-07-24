@@ -5,6 +5,12 @@ const submitButton = document.querySelector('#submit-button');
 const message = document.querySelector('#form-message');
 const emptyState = document.querySelector('#empty-state');
 const report = document.querySelector('#report');
+const scoreValue = document.querySelector('#score-value');
+const scoreLabel = document.querySelector('#score-label');
+const scoreSummary = document.querySelector('#score-summary');
+const scoreCoverage = document.querySelector('#score-coverage');
+const scorePending = document.querySelector('#score-pending');
+const scoreDeductions = document.querySelector('#score-deductions');
 const summaryCards = document.querySelector('#summary-cards');
 const strengthsList = document.querySelector('#strengths-list');
 const findingsList = document.querySelector('#findings-list');
@@ -72,6 +78,22 @@ function renderSummary(summary) {
       <strong>${escapeHtml(card.value)}</strong>
     </article>
   `).join('');
+}
+
+function renderScore(score) {
+  scoreValue.textContent = score.overall;
+  scoreLabel.textContent = score.label;
+  scoreSummary.textContent = score.summary;
+  scoreCoverage.textContent = `${score.evidence_coverage}%`;
+  scorePending.textContent = `${score.pending_count} 项`;
+  scoreDeductions.innerHTML = score.deductions.length
+    ? score.deductions.map((item) => `
+      <div class="score-deduction">
+        <span>${escapeHtml(item.finding_id)} · -${escapeHtml(item.points)} 分</span>
+        <p>${escapeHtml(item.issue)}</p>
+      </div>
+    `).join('')
+    : '<p class="score-no-deduction">本次没有需要扣分的已验证问题。</p>';
 }
 
 function renderStrengths() {
@@ -187,6 +209,7 @@ function renderReport(result) {
   const { audit } = result;
   document.querySelector('#report-target').textContent = audit.meta.target;
   document.querySelector('#report-meta').textContent = `完成于 ${new Date(audit.meta.finished_at).toLocaleString('zh-CN', { hour12: false })} · ${audit.summary.html_pages} 个 HTML 页面 · ${audit.summary.failed_pages} 个失败页面`;
+  renderScore(audit.score);
   renderSummary(audit.summary);
   renderStrengths();
   renderFilters();
@@ -245,7 +268,7 @@ form.addEventListener('submit', async (event) => {
 
   submitButton.disabled = true;
   submitButton.innerHTML = loadingTemplate.innerHTML;
-  showMessage('正在执行只读巡检：检查 robots、sitemap、页面结构和机器可读资源。');
+  showMessage('正在检查公开页面、收录信号、页面结构和机器可读资源。');
   try {
     const response = await fetch('/api/audit', {
       method: 'POST',
@@ -255,12 +278,12 @@ form.addEventListener('submit', async (event) => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || '巡检请求失败。');
     renderReport(data);
-    showMessage('巡检完成。请先处理已验证的高优先级问题，再安排渲染和外部数据取证。');
+    showMessage('检查完成。先看评分和扣分依据，再按顺序处理问题。');
   } catch (error) {
     showMessage(error.message || '巡检请求失败。', true);
   } finally {
     submitButton.disabled = false;
-    submitButton.innerHTML = '<span>开始只读巡检</span><span aria-hidden="true">↗</span>';
+    submitButton.innerHTML = '<span>查看我的网站问题</span><span aria-hidden="true">↗</span>';
   }
 });
 
