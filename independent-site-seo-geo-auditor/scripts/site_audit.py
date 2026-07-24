@@ -1106,7 +1106,7 @@ def build_agent_prompts(audit: dict[str, Any]) -> list[dict[str, str]]:
 def audit_site(
     url: str,
     *,
-    max_pages: int = 100,
+    max_pages: int = 300,
     timeout: float = 10,
     delay: float = 0.1,
     max_bytes: int = 5_000_000,
@@ -1399,7 +1399,7 @@ def markdown_report(audit: dict[str, Any]) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("url", help="Public site URL, including http:// or https://")
-    parser.add_argument("--max-pages", type=int, default=100, help="Maximum same-origin pages to crawl (default: 100)")
+    parser.add_argument("--max-pages", type=int, default=300, help="Maximum same-origin pages to crawl (default: 300)")
     parser.add_argument("--timeout", type=float, default=10, help="Per-request timeout in seconds")
     parser.add_argument("--delay", type=float, default=0.1, help="Delay between page requests in seconds")
     parser.add_argument("--max-bytes", type=int, default=5_000_000, help="Maximum response bytes read per URL")

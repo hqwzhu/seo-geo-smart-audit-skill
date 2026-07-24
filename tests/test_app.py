@@ -30,7 +30,11 @@ class AppRequestTests(unittest.TestCase):
 
     def test_rejects_page_limit_outside_web_boundary(self) -> None:
         with self.assertRaises(AuditRequestError):
-            parse_audit_request({"url": "https://example.com", "max_pages": 101})
+            parse_audit_request({"url": "https://example.com", "max_pages": 301})
+
+    def test_accepts_new_page_limit(self) -> None:
+        _, max_pages = parse_audit_request({"url": "https://example.com", "max_pages": 300})
+        self.assertEqual(300, max_pages)
 
     def test_web_entrypoint_exists(self) -> None:
         self.assertTrue((WEB_DIR / "index.html").is_file())
@@ -40,6 +44,9 @@ class AppRequestTests(unittest.TestCase):
         self.assertIn("一个不会让你失望的AI网站", html)
         self.assertIn("找出流量卡点，拿到修复方案", html)
         self.assertIn('id="score-value"', html)
+        self.assertIn('value="300"', html)
+        self.assertIn("02 / 报告会显示", html)
+        self.assertNotIn('class="empty-index"', html)
 
     def test_web_entrypoint_links_supported_agents(self) -> None:
         html = (WEB_DIR / "index.html").read_text(encoding="utf-8")

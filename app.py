@@ -18,7 +18,7 @@ ROOT_DIR = Path(__file__).resolve().parent
 ENGINE_DIR = ROOT_DIR / "independent-site-seo-geo-auditor" / "scripts"
 WEB_DIR = ROOT_DIR / "web"
 MAX_BODY_BYTES = 16_384
-MAX_WEB_PAGES = 100
+MAX_WEB_PAGES = 300
 DEFAULT_WEB_PAGES = 25
 AUDIT_GATE = threading.BoundedSemaphore(value=1)
 
@@ -51,14 +51,14 @@ def parse_audit_request(payload: Any) -> tuple[str, int]:
 
     raw_max_pages = payload.get("max_pages", DEFAULT_WEB_PAGES)
     if isinstance(raw_max_pages, bool):
-        raise AuditRequestError("页面上限必须是 1 到 100 之间的整数。")
+        raise AuditRequestError("页面上限必须是 1 到 300 之间的整数。")
     try:
         max_pages = int(raw_max_pages)
     except (TypeError, ValueError) as exc:
-        raise AuditRequestError("页面上限必须是 1 到 100 之间的整数。") from exc
+        raise AuditRequestError("页面上限必须是 1 到 300 之间的整数。") from exc
 
     if not 1 <= max_pages <= MAX_WEB_PAGES:
-        raise AuditRequestError("页面上限必须是 1 到 100 之间的整数。")
+        raise AuditRequestError("页面上限必须是 1 到 300 之间的整数。")
     return url, max_pages
 
 

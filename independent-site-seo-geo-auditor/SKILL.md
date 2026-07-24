@@ -15,7 +15,7 @@ description: 对公开独立站执行只读、证据化的 SEO 与 GEO 智能巡
 - 重点国家、语言与 URL 结构
 - 重点页面、主题和查询词
 - 是否提供 GSC、Bing Webmaster、GA4 或真实用户性能数据
-- 巡检上限；默认最多抓取 100 个同源 HTML 页面
+- 巡检上限；默认最多抓取 300 个同源 HTML 页面
 
 ## 证据边界
 
@@ -49,7 +49,7 @@ description: 对公开独立站执行只读、证据化的 SEO 与 GEO 智能巡
 
 ```bash
 python scripts/site_audit.py https://example.com \
-  --max-pages 100 \
+  --max-pages 300 \
   --json-out audit.json \
   --markdown-out audit.md
 ```
@@ -149,8 +149,8 @@ python app.py
 
 在浏览器打开 `http://127.0.0.1:8000`，输入公开站点 URL 后即可发起同一套只读巡检、查看证据化报告，并下载 JSON 或 Markdown。
 
-网页 API 固定禁用 `--allow-private`，每次最多巡检 100 个同源页面，且同一实例同时只执行一项巡检。网页报告仍必须遵守本文件的证据边界；它不会伪造 Core Web Vitals 或真实答案引擎引用结果。
+网页 API 固定禁用 `--allow-private`，每次最多巡检 300 个同源页面，且同一实例同时只执行一项巡检。网页报告仍必须遵守本文件的证据边界；它不会伪造 Core Web Vitals 或真实答案引擎引用结果。
 
 ## 版本
 
-包版本：`1.3.0`
+包版本：`1.3.1`

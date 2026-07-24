@@ -114,8 +114,7 @@ input:focus, select:focus { border-color: var(--moss); box-shadow: 0 0 0 3px rgb
 .form-message { min-height: 22px; margin: 12px 0 0; color: var(--muted); font-size: 13px; }
 .form-message.error { color: #b43f2d; }
 
-.empty-state { display: grid; grid-template-columns: 68px 1fr 1.18fr; gap: 24px; align-items: start; padding: 30px; }
-.empty-index { color: #aab3ad; font-size: 30px; font-weight: 800; letter-spacing: 0; }
+.empty-state { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr); gap: 24px; align-items: start; padding: 30px; }
 .empty-state h2 { font-size: 25px; }
 .empty-state ul { margin: 3px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 14px; }
 .empty-state li { padding: 8px 0; border-bottom: 1px solid #e6ebe6; }
